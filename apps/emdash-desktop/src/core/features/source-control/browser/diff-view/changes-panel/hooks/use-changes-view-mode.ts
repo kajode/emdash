@@ -3,7 +3,7 @@ import type { ChangesListViewMode, ChangesSection } from '@core/primitives/app-s
 
 export function useChangesViewMode(section: ChangesSection) {
   const { value, update } = useAppSettingsKey('changesViewMode');
-  const mode: ChangesListViewMode = value?.[section] ?? 'flat';
+  const mode: ChangesListViewMode = value?.[section] ?? 'tree';
   const setMode = (next: ChangesListViewMode) => update({ [section]: next });
   return { mode, setMode };
 }

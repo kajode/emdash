@@ -38,20 +38,20 @@ function createStore(initial?: Partial<TaskChromeState>): TaskChromeStore {
 }
 
 describe('taskChromeStore sidebar commands', () => {
-  it('starts from the memento default: collapsed on the conversations tab', () => {
+  it('starts from the memento default: open on the changes tab', () => {
     const store = createStore();
 
-    expect(store.state.sidebarCollapsed).toBe(true);
-    expect(store.state.sidebarTab).toBe('conversations');
+    expect(store.state.sidebarCollapsed).toBe(false);
+    expect(store.state.sidebarTab).toBe('changes');
     expect(store.state.terminalDrawerOpen).toBe(false);
   });
 
   it('toggleSidebar flips collapsed without touching the tab', () => {
-    const store = createStore({ sidebarTab: 'changes' });
+    const store = createStore({ sidebarTab: 'files', sidebarCollapsed: true });
 
     store.commands.toggleSidebar();
     expect(store.state.sidebarCollapsed).toBe(false);
-    expect(store.state.sidebarTab).toBe('changes');
+    expect(store.state.sidebarTab).toBe('files');
 
     store.commands.toggleSidebar();
     expect(store.state.sidebarCollapsed).toBe(true);
@@ -151,6 +151,34 @@ describe('taskChromeStore terminal drawer commands', () => {
     store.commands.toggleTerminalDrawer();
     expect(store.state.terminalDrawerOpen).toBe(false);
     expect(store.ephemeral.focusedRegion).toBe('main');
+  });
+
+  it('openTerminalDrawer expands the sidebar the drawer is docked in', () => {
+    const store = createStore({ sidebarCollapsed: true });
+
+    store.commands.openTerminalDrawer();
+
+    expect(store.state.terminalDrawerOpen).toBe(true);
+    expect(store.state.sidebarCollapsed).toBe(false);
+  });
+
+  it('toggleTerminalDrawer shows a drawer hidden by a collapsed sidebar instead of closing it', () => {
+    const store = createStore({ sidebarCollapsed: true, terminalDrawerOpen: true });
+
+    store.commands.toggleTerminalDrawer();
+
+    expect(store.state.terminalDrawerOpen).toBe(true);
+    expect(store.state.sidebarCollapsed).toBe(false);
+    expect(store.ephemeral.focusedRegion).toBe('bottom');
+  });
+
+  it('closing the drawer leaves the sidebar open', () => {
+    const store = createStore({ sidebarCollapsed: false, terminalDrawerOpen: true });
+
+    store.commands.toggleTerminalDrawer();
+
+    expect(store.state.terminalDrawerOpen).toBe(false);
+    expect(store.state.sidebarCollapsed).toBe(false);
   });
 
   it('reasserts bottom focus when opening an already-open drawer', () => {

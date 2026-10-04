@@ -14,8 +14,9 @@ type TaskChromeEphemeral = { focusedRegion: TaskFocusedRegion };
  * Task chrome command store (spec §Chrome command stores): the `tasks.chrome`
  * memento document mutated only through named commands, one instance per task
  * subject. Invariants live here — selecting a sidebar tab always expands the
- * sidebar, and the terminal drawer owns the focused-region coupling — so call
- * sites never coordinate multiple setters.
+ * sidebar, the terminal drawer lives inside the sidebar so opening it expands the
+ * sidebar too, and the drawer owns the focused-region coupling — so call sites
+ * never coordinate multiple setters.
  *
  * `focusedRegion` is ephemeral (observable, never persisted) and has no write
  * path outside these commands.
@@ -45,7 +46,7 @@ export const taskChromeStore = defineChromeStore({
       return { state: { ...state, sidebarTab: tab, sidebarCollapsed: false } };
     },
     openTerminalDrawer: ({ state }) => ({
-      state: { ...state, terminalDrawerOpen: true },
+      state: { ...state, terminalDrawerOpen: true, sidebarCollapsed: false },
       ephemeral: { focusedRegion: 'bottom' as const },
     }),
     closeTerminalDrawer: ({ state }) => ({
@@ -53,9 +54,14 @@ export const taskChromeStore = defineChromeStore({
       ephemeral: { focusedRegion: 'main' as const },
     }),
     toggleTerminalDrawer: ({ state }) => {
-      const open = !state.terminalDrawerOpen;
+      // A drawer left open inside a collapsed sidebar is not visible: toggling shows it.
+      const open = !state.terminalDrawerOpen || state.sidebarCollapsed;
       return {
-        state: { ...state, terminalDrawerOpen: open },
+        state: {
+          ...state,
+          terminalDrawerOpen: open,
+          sidebarCollapsed: open ? false : state.sidebarCollapsed,
+        },
         ephemeral: { focusedRegion: open ? ('bottom' as const) : ('main' as const) },
       };
     },

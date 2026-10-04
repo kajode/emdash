@@ -12,7 +12,7 @@ export type TerminalDrawerActiveItem = z.infer<typeof terminalDrawerActiveItemSc
 
 const taskChromeV1Schema = z.object({
   version: z.literal('1'),
-  sidebarTab: z.enum(['conversations', 'changes', 'files']),
+  sidebarTab: z.enum(['conversations', 'changes', 'files', 'checks']),
   sidebarCollapsed: z.boolean(),
   terminalDrawerOpen: z.boolean(),
 });
@@ -26,8 +26,8 @@ export const taskChromeMemento = defineMemento({
   schema: taskChromeSchema,
   default: {
     version: '1' as const,
-    sidebarTab: 'conversations' as const,
-    sidebarCollapsed: true,
+    sidebarTab: 'changes' as const,
+    sidebarCollapsed: false,
     terminalDrawerOpen: false,
   },
 });

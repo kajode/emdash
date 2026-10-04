@@ -328,7 +328,7 @@ const ActiveTaskTitlebar = observer(function ActiveTaskTitlebar({
               <Toggle
                 size="sm"
                 icon
-                pressed={taskView.isTerminalDrawerOpen}
+                pressed={taskView.isTerminalDrawerOpen && !taskView.isSidebarCollapsed}
                 onPressedChange={() => taskView.chrome.commands.toggleTerminalDrawer()}
               >
                 <Terminal className="size-3.5" />
