@@ -54,6 +54,7 @@ export type InterfaceSettings = {
   showLeftSidebarLineChanges: boolean;
   showLeftSidebarPrStatus: boolean;
   showLeftSidebarTimestamps: boolean;
+  autoArchiveOnMerge: boolean;
   hideContextBar: boolean;
 };
 

@@ -2,6 +2,7 @@ import { isDeepEqual } from '@emdash/shared';
 import { createScope, type Scope } from '@emdash/shared/concurrency';
 import { observe, remote, type RemoteModel } from '@emdash/wire/state';
 import { reaction, toJS } from 'mobx';
+import { getAppSettingValueSnapshot } from '@core/features/settings/api/browser/use-app-settings-key';
 import type { GitRepositoryStore } from '@core/features/source-control/api/browser/stores/git-repository-store';
 import { getTaskPrAssociationStore } from '@core/features/source-control/api/browser/stores/task-source-control-selectors';
 import { gitCheckoutStoreToken } from '@core/features/source-control/contributions/browser/workspace-store-tokens';
@@ -14,6 +15,7 @@ import {
   getPullRequestsRuntimeClient,
   type PullRequestsRuntimeClient,
 } from '@core/services/pull-requests/api/client';
+import { shouldAutoArchiveOnMerge } from './auto-archive-on-merge';
 import { derivePrAssociation } from './derive-pr-association';
 import { derivePrCheckoutDrift, type PrDriftObservedFacts } from './derive-pr-checkout-drift';
 
@@ -24,6 +26,7 @@ export class TaskPrSyncCoordinator {
     null;
   private generation = 0;
   private readonly reloadGenerations = new WeakMap<TaskStore, number>();
+  private readonly autoArchiving = new Set<string>();
   /** The PR cache's last-sync stamp for the watched repository ("as of last sync"). */
   private lastSyncedAt: number | null = null;
   private readonly disposeGitHeadReaction: () => void;
@@ -139,6 +142,19 @@ export class TaskPrSyncCoordinator {
     });
     if (!isRegistered(store)) return;
     association.setAssociation(prs, drift);
+    this.archiveIfMerged(store, selectCurrentPr(prs) ?? null);
+  }
+
+  /** Archiving keeps the worktree and the session ids, so the task can be restored. */
+  private archiveIfMerged(store: TaskStore, pr: Task['prs'][number] | null): void {
+    if (getAppSettingValueSnapshot('interface')?.autoArchiveOnMerge !== true) return;
+    const task = store.data as Task;
+    if (this.autoArchiving.has(task.id) || !shouldAutoArchiveOnMerge(task, pr)) return;
+    this.autoArchiving.add(task.id);
+    void this.tasks
+      .archiveTask(task.id)
+      .catch(() => {})
+      .finally(() => this.autoArchiving.delete(task.id));
   }
 
   private async watchSync(repositoryUrl: string | null): Promise<void> {

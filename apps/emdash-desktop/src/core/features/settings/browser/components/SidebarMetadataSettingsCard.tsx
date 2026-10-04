@@ -19,6 +19,7 @@ const SidebarMetadataSettingsCard: React.FC = () => {
   const showLineChanges = interfaceSettings?.showLeftSidebarLineChanges ?? true;
   const showPrStatus = interfaceSettings?.showLeftSidebarPrStatus ?? true;
   const showTimestamps = interfaceSettings?.showLeftSidebarTimestamps ?? true;
+  const autoArchiveOnMerge = interfaceSettings?.autoArchiveOnMerge ?? true;
 
   return (
     <SettingsCard>
@@ -79,6 +80,26 @@ const SidebarMetadataSettingsCard: React.FC = () => {
                 onCheckedChange={(checked) => update({ showLeftSidebarTimestamps: checked })}
                 disabled={busy}
                 aria-label="Show left sidebar timestamps"
+              />
+            </>
+          }
+        />
+        <SettingRow
+          title="Archive on merge"
+          description="Archive a task when its pull request merges. The worktree is kept and the task can be restored."
+          control={
+            <>
+              <ResetToDefaultButton
+                visible={isFieldOverridden('autoArchiveOnMerge')}
+                defaultLabel="on"
+                onReset={() => resetField('autoArchiveOnMerge')}
+                disabled={busy}
+              />
+              <Switch
+                checked={autoArchiveOnMerge}
+                onCheckedChange={(checked) => update({ autoArchiveOnMerge: checked })}
+                disabled={busy}
+                aria-label="Archive tasks on merge"
               />
             </>
           }

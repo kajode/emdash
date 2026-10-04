@@ -37,9 +37,7 @@ export function SidebarStatusGroupLabel({
         }
       />
       {collapsed && (
-        <span className="text-xs font-normal text-foreground-tertiary-passive">
-          {count}
-        </span>
+        <span className="text-xs font-normal text-foreground-tertiary-passive">{count}</span>
       )}
     </button>
   );

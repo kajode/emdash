@@ -30,6 +30,7 @@ const interfaceSettingsSchema = z.object({
   showLeftSidebarLineChanges: z.boolean(),
   showLeftSidebarPrStatus: z.boolean(),
   showLeftSidebarTimestamps: z.boolean(),
+  autoArchiveOnMerge: z.boolean(),
   hideContextBar: z.boolean(),
 });
 
@@ -62,6 +63,7 @@ export const interfaceSettingsContribution = defineSettingsContribution<
     showLeftSidebarLineChanges: true,
     showLeftSidebarPrStatus: true,
     showLeftSidebarTimestamps: true,
+    autoArchiveOnMerge: true,
     hideContextBar: false,
   },
 });
