@@ -21,9 +21,12 @@ function Slot({ children }: { children: React.ReactNode }) {
 export const TaskSidebarTrailingSlot = observer(function TaskSidebarTrailingSlot({
   task,
   showTimestamp,
+  showAgentStatus = true,
 }: {
   task: TaskStore;
   showTimestamp: boolean;
+  /** Off when the row already shows the agent status in its leading slot. */
+  showAgentStatus?: boolean;
 }) {
   const delayedIsBootstrapping = useDelayedBoolean(task.isBootstrapping, 500);
 
@@ -43,7 +46,7 @@ export const TaskSidebarTrailingSlot = observer(function TaskSidebarTrailingSlot
   }
 
   // Show the agent status indicator for any active/unseen state; fall back to timestamp for null (idle).
-  const status = taskAgentStatus(task);
+  const status = showAgentStatus ? taskAgentStatus(task) : null;
   if (status !== null) {
     return (
       <Slot>

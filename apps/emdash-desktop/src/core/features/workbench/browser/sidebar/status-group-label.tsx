@@ -1,3 +1,4 @@
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import {
   TASK_STATUS_LABELS,
   TaskStatusIcon,
@@ -7,14 +8,39 @@ import type { TaskLifecycleStatus } from '@core/primitives/tasks/api';
 interface SidebarStatusGroupLabelProps {
   status: TaskLifecycleStatus;
   count: number;
+  collapsed: boolean;
+  onToggle: () => void;
 }
 
-export function SidebarStatusGroupLabel({ status, count }: SidebarStatusGroupLabelProps) {
+export function SidebarStatusGroupLabel({
+  status,
+  count,
+  collapsed,
+  onToggle,
+}: SidebarStatusGroupLabelProps) {
+  const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
-    <div className="flex h-8 items-center gap-2 pr-2 pl-8 text-sm font-medium text-foreground-tertiary">
+    <button
+      type="button"
+      aria-expanded={!collapsed}
+      className="group/status flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm font-semibold text-foreground hover:bg-background-tertiary-1"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onToggle}
+    >
       <TaskStatusIcon status={status} className="size-3.5" />
       <span className="min-w-0 truncate">{TASK_STATUS_LABELS[status]}</span>
-      <span className="text-xs font-normal text-foreground-tertiary-passive">{count}</span>
-    </div>
+      <Chevron
+        className={
+          collapsed
+            ? 'size-3.5 text-foreground-tertiary-passive'
+            : 'size-3.5 text-foreground-tertiary-passive opacity-0 group-hover/status:opacity-100'
+        }
+      />
+      {collapsed && (
+        <span className="ml-auto text-xs font-normal text-foreground-tertiary-passive">
+          {count}
+        </span>
+      )}
+    </button>
   );
 }

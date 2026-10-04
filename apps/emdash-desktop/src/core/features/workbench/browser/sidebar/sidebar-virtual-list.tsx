@@ -21,6 +21,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { MicroLabel } from '@emdash/ui/react/primitives';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { observer } from 'mobx-react-lite';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -63,7 +64,7 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
       ? getSidebarStore().expandedProjectIds.has(taskParams.projectId)
       : null;
   const allDndIds = useMemo(
-    () => rows.filter((row) => row.kind !== 'status').map(rowToDndId),
+    () => rows.filter((row) => row.kind === 'project' || row.kind === 'task').map(rowToDndId),
     [rows]
   );
 
@@ -232,7 +233,21 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
               if (row.kind === 'status') {
                 return (
                   <div key={dndId} style={vStyle}>
-                    <SidebarStatusGroupLabel status={row.status} count={row.count} />
+                    <SidebarStatusGroupLabel
+                      status={row.status}
+                      count={row.count}
+                      collapsed={row.collapsed}
+                      onToggle={() => getSidebarStore().toggleStatusGroupCollapsed(row.status)}
+                    />
+                  </div>
+                );
+              }
+              if (row.kind === 'projects-label') {
+                return (
+                  <div key={dndId} style={vStyle} className="flex items-end px-2 pb-1.5">
+                    <MicroLabel className="font-medium text-foreground-tertiary-passive">
+                      Projects
+                    </MicroLabel>
                   </div>
                 );
               }
@@ -262,8 +277,9 @@ type SidebarDndId =
 
 function rowToDndId(row: SidebarRow): string {
   if (row.kind === 'project') return toProjectDndId(row.projectId);
-  // Status headers are not sortable; the id only keys the row and never parses as a drag target.
-  if (row.kind === 'status') return `status::${row.projectId}::${row.status}`;
+  // Group headers are not sortable; these ids only key the row and never parse as a drag target.
+  if (row.kind === 'status') return `status::${row.status}`;
+  if (row.kind === 'projects-label') return 'projects-label';
   return toTaskDndId(row.projectId, row.taskId);
 }
 

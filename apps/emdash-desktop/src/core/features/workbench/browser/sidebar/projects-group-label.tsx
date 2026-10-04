@@ -10,7 +10,9 @@ export const ProjectsGroupLabel = observer(function ProjectsGroupLabel() {
 
   return (
     <div className="flex h-[40px] items-center justify-between pr-2.5 pl-5">
-      <MicroLabel className="font-medium text-foreground-tertiary-passive">Projects</MicroLabel>
+      <MicroLabel className="font-medium text-foreground-tertiary-passive">
+        {getSidebarStore().groupTasksByStatus ? 'Tasks' : 'Projects'}
+      </MicroLabel>
       <div className="flex items-center gap-1">
         <DropdownMenu.Root>
           <Tooltip.Root>

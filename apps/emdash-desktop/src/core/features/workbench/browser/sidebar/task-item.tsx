@@ -1,4 +1,11 @@
+import { AgentStatus } from '@emdash/ui/react/components';
+import { GitBranch } from 'lucide-react';
 import { observer } from 'mobx-react-lite';
+import { taskAgentStatus } from '@core/features/conversations/api/browser/conversation-selectors';
+import {
+  getProjectStore,
+  projectData,
+} from '@core/features/projects/api/browser/stores/project-selectors';
 import { projectViewDef } from '@core/features/projects/contributions/views';
 import { useAppSettingsKey } from '@core/features/settings/api/browser/use-app-settings-key';
 import {
@@ -15,6 +22,7 @@ import { TaskGitDiffStats } from '@core/features/tasks/contributions/browser/tas
 import { taskViewDef } from '@core/features/tasks/contributions/views';
 import { getTaskWorkspace } from '@core/features/workbench/api/browser/task-composition-selectors';
 import { TaskSidebarTrailingSlot } from '@core/features/workbench/browser/sidebar/task-sidebar-agent-status';
+import { getSidebarStore } from '@core/features/workbench/contributions/browser/app-stores';
 import { useOpenModal } from '@core/manifests/browser/modal-api';
 import {
   useNavigate,
@@ -90,6 +98,9 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
   const showPrStatus = interfaceSettings?.showLeftSidebarPrStatus ?? true;
   const showTimestamps = interfaceSettings?.showLeftSidebarTimestamps ?? true;
   const branchName = git?.branchName ?? undefined;
+  // Status-grouped rows sit directly under a status header, with no project row above
+  // them: the row itself carries what the agent is doing and which project it is in.
+  const isGrouped = rowVariant === 'underProject' && getSidebarStore().groupTasksByStatus;
   const handleReconnect =
     workspaceStore?.connectionState != null ? () => workspaceStore.reconnect() : undefined;
 
@@ -112,7 +123,7 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
       <SidebarMenuRow
         className={cn(
           'group/row flex items-center justify-between px-1 py-1.5 h-8 gap-1',
-          rowVariant === 'pinned' ? 'pl-2' : 'pl-8'
+          rowVariant === 'pinned' || isGrouped ? 'pl-2' : 'pl-8'
         )}
         isActive={isActive}
         onMouseDown={(e) => e.preventDefault()}
@@ -120,8 +131,12 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
       >
         <SidebarMenuAction
           aria-label={`Open task ${taskName || 'task'}`}
-          className="gap-1 overflow-hidden"
+          className={cn('overflow-hidden', isGrouped ? 'gap-2' : 'gap-1')}
         >
+          {isGrouped && getSidebarStore().hasMultipleProjects && (
+            <ProjectInitial projectId={projectId} />
+          )}
+          {isGrouped && <LeadingActivity task={task} />}
           <span
             className={cn(
               'min-w-0 truncate text-left transition-colors',
@@ -133,11 +148,47 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
         </SidebarMenuAction>
         <div className="ml-2 flex shrink-0 items-center justify-end gap-1.5">
           {showLineChanges && <TaskGitDiffStats task={task} />}
-          {showPrStatus && <RenderPrBadge task={task} />}
-          <TaskSidebarTrailingSlot task={task} showTimestamp={showTimestamps} />
+          {showPrStatus && !isGrouped && <RenderPrBadge task={task} />}
+          <TaskSidebarTrailingSlot
+            task={task}
+            showTimestamp={showTimestamps}
+            showAgentStatus={!isGrouped}
+          />
         </div>
       </SidebarMenuRow>
     </TaskContextMenu>
+  );
+});
+
+/** What the task is doing right now: a live agent status, else its PR, else just a branch. */
+const LeadingActivity = observer(function LeadingActivity({ task }: { task: TaskStore }) {
+  const status = taskAgentStatus(task);
+  const pr = selectCurrentPr(getTaskPrAssociationStore(task).pullRequests);
+  return (
+    <span className="flex size-4 shrink-0 items-center justify-center">
+      {status !== null ? (
+        <AgentStatus status={status} tooltip />
+      ) : pr ? (
+        <span onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+          <PrBadge variant="compact" pr={pr} hoverDelay={100} />
+        </span>
+      ) : (
+        <GitBranch className="size-3.5 text-foreground-tertiary-passive" />
+      )}
+    </span>
+  );
+});
+
+const ProjectInitial = observer(function ProjectInitial({ projectId }: { projectId: string }) {
+  const store = getProjectStore(projectId);
+  const name = (store ? projectData(store)?.name : undefined) ?? '';
+  return (
+    <span
+      title={name}
+      className="flex size-4 shrink-0 items-center justify-center rounded bg-background-tertiary-3 text-[10px] font-medium text-foreground-tertiary uppercase"
+    >
+      {name.charAt(0)}
+    </span>
   );
 });
 

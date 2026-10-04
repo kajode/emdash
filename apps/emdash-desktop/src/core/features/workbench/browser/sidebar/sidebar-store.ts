@@ -44,14 +44,14 @@ function isVisibleRegularTask(task: TaskStore): boolean {
   );
 }
 
-/** Order of the status groups in the sidebar: what needs attention first, closed work last. */
+/** Order of the status groups in the sidebar, top to bottom. */
 export const SIDEBAR_STATUS_ORDER: readonly TaskLifecycleStatus[] = [
+  'done',
   'review',
   'in_progress',
   'todo',
   'backlog',
   'triage',
-  'done',
   'cancelled',
   'duplicate',
 ];
@@ -62,7 +62,8 @@ function sidebarStatusOf(task: TaskStore): TaskLifecycleStatus {
 
 export type SidebarRow =
   | { kind: 'project'; projectId: string }
-  | { kind: 'status'; projectId: string; status: TaskLifecycleStatus; count: number }
+  | { kind: 'status'; status: TaskLifecycleStatus; count: number; collapsed: boolean }
+  | { kind: 'projects-label' }
   | { kind: 'task'; projectId: string; taskId: string };
 
 export class SidebarStore {
@@ -126,7 +127,52 @@ export class SidebarStore {
     });
   }
 
+  get collapsedStatusGroups(): ReadonlySet<TaskLifecycleStatus> {
+    return new Set(this.state.collapsedStatusGroups ?? []);
+  }
+
+  get hasMultipleProjects(): boolean {
+    return this.projectManager.projects.size > 1;
+  }
+
+  /**
+   * Grouped layout: one status group per lifecycle status across every project, then
+   * the projects themselves as plain rows so their pages and actions stay reachable.
+   */
+  private get statusGroupedRows(): SidebarRow[] {
+    const entries: { projectId: string; task: TaskStore }[] = [];
+    for (const project of this.orderedProjects) {
+      const context = asAvailableProject(project);
+      if (!context) continue;
+      const tasks = Array.from(context.get(taskManagerStoreToken).tasks.values()).filter(
+        (task) => isVisibleRegularTask(task) && !task.data.isPinned
+      );
+      for (const task of this.orderTasksForProject(project.id, tasks)) {
+        entries.push({ projectId: project.id, task });
+      }
+    }
+
+    const rows: SidebarRow[] = [];
+    const collapsedGroups = this.collapsedStatusGroups;
+    for (const status of SIDEBAR_STATUS_ORDER) {
+      const group = entries.filter(({ task }) => sidebarStatusOf(task) === status);
+      if (group.length === 0) continue;
+      const collapsed = collapsedGroups.has(status);
+      rows.push({ kind: 'status', status, count: group.length, collapsed });
+      if (collapsed) continue;
+      for (const { projectId, task } of group) {
+        rows.push({ kind: 'task', projectId, taskId: task.data.id });
+      }
+    }
+    if (this.orderedProjects.length > 0) rows.push({ kind: 'projects-label' });
+    for (const project of this.orderedProjects) {
+      rows.push({ kind: 'project', projectId: project.id });
+    }
+    return rows;
+  }
+
   get sidebarRows(): SidebarRow[] {
+    if (this.groupTasksByStatus) return this.statusGroupedRows;
     const rows: SidebarRow[] = [];
     for (const project of this.orderedProjects) {
       const projectId = project.id;
@@ -136,20 +182,8 @@ export class SidebarStore {
         const tasks = Array.from(context.get(taskManagerStoreToken).tasks.values()).filter(
           (task) => isVisibleRegularTask(task) && !task.data.isPinned
         );
-        const ordered = this.orderTasksForProject(projectId, tasks);
-        if (!this.groupTasksByStatus) {
-          for (const task of ordered) {
-            rows.push({ kind: 'task', projectId, taskId: task.data.id });
-          }
-          continue;
-        }
-        for (const status of SIDEBAR_STATUS_ORDER) {
-          const group = ordered.filter((task) => sidebarStatusOf(task) === status);
-          if (group.length === 0) continue;
-          rows.push({ kind: 'status', projectId, status, count: group.length });
-          for (const task of group) {
-            rows.push({ kind: 'task', projectId, taskId: task.data.id });
-          }
+        for (const task of this.orderTasksForProject(projectId, tasks)) {
+          rows.push({ kind: 'task', projectId, taskId: task.data.id });
         }
       }
     }
@@ -241,6 +275,18 @@ export class SidebarStore {
 
   setGroupTasksByStatus(groupTasksByStatus: boolean): void {
     this.updateState((current) => ({ ...current, groupTasksByStatus }));
+  }
+
+  toggleStatusGroupCollapsed(status: TaskLifecycleStatus): void {
+    this.updateState((current) => {
+      const collapsed = current.collapsedStatusGroups ?? [];
+      return {
+        ...current,
+        collapsedStatusGroups: collapsed.includes(status)
+          ? collapsed.filter((candidate) => candidate !== status)
+          : [...collapsed, status],
+      };
+    });
   }
 
   setProjectOrder(ids: string[]): void {

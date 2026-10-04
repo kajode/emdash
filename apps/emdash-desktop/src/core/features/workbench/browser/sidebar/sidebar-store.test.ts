@@ -294,14 +294,14 @@ describe('SidebarStore status grouping', () => {
     return store;
   }
 
-  const label = (row: SidebarRow) =>
-    row.kind === 'task'
-      ? row.taskId
-      : row.kind === 'status'
-        ? `[${row.status} ${row.count}]`
-        : row.projectId;
+  const label = (row: SidebarRow) => {
+    if (row.kind === 'task') return row.taskId;
+    if (row.kind === 'status') return `[${row.status} ${row.count}]`;
+    if (row.kind === 'projects-label') return '[projects]';
+    return row.projectId;
+  };
 
-  it('keeps one flat list when grouping is off or was never stored', () => {
+  it('keeps the project tree when grouping is off or was never stored', () => {
     for (const stored of [undefined, false]) {
       expect(storeWithStatuses(stored).sidebarRows.map(label)).toEqual([
         'project-1',
@@ -314,27 +314,45 @@ describe('SidebarStore status grouping', () => {
     }
   });
 
-  it('puts a header above each non-empty status, review first, sort order kept inside', () => {
+  it('lists status groups first, sort order kept inside, then the projects', () => {
     const store = storeWithStatuses(true);
 
     expect(store.sidebarRows.map(label)).toEqual([
-      'project-1',
+      '[done 1]',
+      'done',
       '[review 2]',
       'review-new',
       'review-old',
       '[in_progress 2]',
       'progress-new',
       'progress-old',
-      '[done 1]',
-      'done',
+      '[projects]',
+      'project-1',
     ]);
     expect(store.visibleTaskIdsForProject('project-1')).toEqual([
+      'done',
       'review-new',
       'review-old',
       'progress-new',
       'progress-old',
-      'done',
     ]);
+  });
+
+  it('hides the tasks of a collapsed status group but keeps its header and count', () => {
+    const store = storeWithStatuses(true);
+
+    store.toggleStatusGroupCollapsed('review');
+
+    expect(store.sidebarRows.map(label).slice(0, 4)).toEqual([
+      '[done 1]',
+      'done',
+      '[review 2]',
+      '[in_progress 2]',
+    ]);
+
+    store.toggleStatusGroupCollapsed('review');
+
+    expect(store.sidebarRows.map(label)).toContain('review-new');
   });
 
   it('toggles grouping through the memento', () => {
