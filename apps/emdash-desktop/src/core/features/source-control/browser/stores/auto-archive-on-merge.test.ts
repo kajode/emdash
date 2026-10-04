@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { shouldAutoArchiveOnMerge } from './auto-archive-on-merge';
+import { chatHoldsTask, shouldAutoArchiveOnMerge } from './auto-archive-on-merge';
 
 const merged = { status: 'merged', updatedAt: '2026-10-04T12:00:00Z' };
 
@@ -34,5 +34,18 @@ describe('shouldAutoArchiveOnMerge', () => {
 
   it('does nothing when a timestamp cannot be read', () => {
     expect(shouldAutoArchiveOnMerge({ updatedAt: 'not a date' }, merged)).toBe(false);
+  });
+});
+
+describe('chatHoldsTask', () => {
+  it('holds the task while a chat is working or waiting on the user', () => {
+    expect(chatHoldsTask('working')).toBe(true);
+    expect(chatHoldsTask('awaiting-input')).toBe(true);
+  });
+
+  it('releases the task once every chat is idle, finished or failed', () => {
+    for (const status of [null, 'idle', 'completed', 'error']) {
+      expect(chatHoldsTask(status)).toBe(false);
+    }
   });
 });

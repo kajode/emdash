@@ -2,6 +2,7 @@ import { isDeepEqual } from '@emdash/shared';
 import { createScope, type Scope } from '@emdash/shared/concurrency';
 import { observe, remote, type RemoteModel } from '@emdash/wire/state';
 import { reaction, toJS } from 'mobx';
+import { taskAgentStatus } from '@core/features/conversations/api/browser/conversation-selectors';
 import { getAppSettingValueSnapshot } from '@core/features/settings/api/browser/use-app-settings-key';
 import type { GitRepositoryStore } from '@core/features/source-control/api/browser/stores/git-repository-store';
 import { getTaskPrAssociationStore } from '@core/features/source-control/api/browser/stores/task-source-control-selectors';
@@ -15,7 +16,7 @@ import {
   getPullRequestsRuntimeClient,
   type PullRequestsRuntimeClient,
 } from '@core/services/pull-requests/api/client';
-import { shouldAutoArchiveOnMerge } from './auto-archive-on-merge';
+import { chatHoldsTask, shouldAutoArchiveOnMerge } from './auto-archive-on-merge';
 import { derivePrAssociation } from './derive-pr-association';
 import { derivePrCheckoutDrift, type PrDriftObservedFacts } from './derive-pr-checkout-drift';
 
@@ -31,6 +32,7 @@ export class TaskPrSyncCoordinator {
   private lastSyncedAt: number | null = null;
   private readonly disposeGitHeadReaction: () => void;
   private readonly disposeRepositoryReaction: () => void;
+  private readonly disposeChatReaction: () => void;
 
   constructor(
     private readonly tasks: TaskManagerStore,
@@ -65,6 +67,21 @@ export class TaskPrSyncCoordinator {
         }),
       () => this.reloadAll()
     );
+    // A merged task held back by a running chat is archived once that chat settles.
+    this.disposeChatReaction = reaction(
+      () =>
+        [...tasks.tasks.values()]
+          .filter(isRegistered)
+          .map((store) => `${store.data.id}:${chatHoldsTask(taskAgentStatus(store))}`)
+          .join(','),
+      () => {
+        for (const store of tasks.tasks.values()) {
+          if (!isRegistered(store)) continue;
+          const prs = getTaskPrAssociationStore(store).pullRequests;
+          this.archiveIfMerged(store, selectCurrentPr(prs) ?? null);
+        }
+      }
+    );
     this.disposeRepositoryReaction = reaction(
       () => [repository.pullRequestRepositoryUrl, repository.canonicalPushRepositoryUrl] as const,
       ([repositoryUrl]) => {
@@ -82,6 +99,7 @@ export class TaskPrSyncCoordinator {
     void this.scope.dispose();
     this.disposeGitHeadReaction();
     this.disposeRepositoryReaction();
+    this.disposeChatReaction();
   }
 
   private reloadAll(): void {
@@ -149,6 +167,7 @@ export class TaskPrSyncCoordinator {
   private archiveIfMerged(store: TaskStore, pr: Task['prs'][number] | null): void {
     if (getAppSettingValueSnapshot('interface')?.autoArchiveOnMerge !== true) return;
     const task = store.data as Task;
+    if (chatHoldsTask(taskAgentStatus(store))) return;
     if (this.autoArchiving.has(task.id) || !shouldAutoArchiveOnMerge(task, pr)) return;
     this.autoArchiving.add(task.id);
     void this.tasks
