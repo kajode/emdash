@@ -72,7 +72,8 @@ export class UpdateService implements Disposable {
 
     this.updateState.currentVersion = await resolveAppVersion();
 
-    if (import.meta.env.DEV) return;
+    // A build that is not an upstream release (a fork) must not replace itself with one.
+    if (import.meta.env.DEV || import.meta.env.VITE_DISABLE_AUTO_UPDATE === 'true') return;
 
     this.setupAutoUpdater();
     this.setupEventListeners();
