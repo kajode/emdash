@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { taskManagerStoreToken } from '@core/features/tasks/contributions/browser/project-store-tokens';
 import type { WorkbenchSidebarState } from '@core/features/workbench/contributions/mementos';
 import type { MementoHandle } from '@core/primitives/mementos/browser';
-import { SidebarStore } from './sidebar-store';
+import { SidebarStore, type SidebarRow } from './sidebar-store';
 
 type SidebarProjectManager = ConstructorParameters<typeof SidebarStore>[0];
 
@@ -244,5 +244,105 @@ describe('SidebarStore project ordering', () => {
     ]);
     expect(store.visibleTaskIdsForProject('project-1')).toEqual([]);
     expect(store.sidebarRows).toEqual([{ kind: 'project', projectId: 'project-1' }]);
+  });
+});
+
+describe('SidebarStore status grouping', () => {
+  function storeWithStatuses(groupTasksByStatus: boolean | undefined) {
+    const tasks = new Map(
+      (
+        [
+          ['progress-old', 'in_progress', '2026-01-01T00:00:01.000Z'],
+          ['review-old', 'review', '2026-01-01T00:00:02.000Z'],
+          ['done', 'done', '2026-01-01T00:00:03.000Z'],
+          ['progress-new', 'in_progress', '2026-01-01T00:00:04.000Z'],
+          ['review-new', 'review', '2026-01-01T00:00:05.000Z'],
+        ] as const
+      ).map(([id, status, createdAt]) => [
+        id,
+        { ...task(id, createdAt), data: { ...task(id, createdAt).data, status } },
+      ])
+    );
+    const manager = {
+      projects: new Map([
+        [
+          'project-1',
+          {
+            id: 'project-1',
+            createdAt: '2026-01-01T00:00:00.000Z',
+            context: {
+              kind: 'available',
+              context: {
+                get: (token: unknown) => (token === taskManagerStoreToken ? { tasks } : undefined),
+              },
+            },
+          },
+        ],
+      ]),
+    } as unknown as SidebarProjectManager;
+    const store = new SidebarStore(manager);
+    store.attachMemento(
+      mementoHandle({
+        version: '1',
+        expandedProjectIds: ['project-1'],
+        projectOrder: [],
+        taskOrderByProject: {},
+        taskSortBy: 'created-at',
+        ...(groupTasksByStatus !== undefined && { groupTasksByStatus }),
+      })
+    );
+    return store;
+  }
+
+  const label = (row: SidebarRow) =>
+    row.kind === 'task'
+      ? row.taskId
+      : row.kind === 'status'
+        ? `[${row.status} ${row.count}]`
+        : row.projectId;
+
+  it('keeps one flat list when grouping is off or was never stored', () => {
+    for (const stored of [undefined, false]) {
+      expect(storeWithStatuses(stored).sidebarRows.map(label)).toEqual([
+        'project-1',
+        'review-new',
+        'progress-new',
+        'done',
+        'review-old',
+        'progress-old',
+      ]);
+    }
+  });
+
+  it('puts a header above each non-empty status, review first, sort order kept inside', () => {
+    const store = storeWithStatuses(true);
+
+    expect(store.sidebarRows.map(label)).toEqual([
+      'project-1',
+      '[review 2]',
+      'review-new',
+      'review-old',
+      '[in_progress 2]',
+      'progress-new',
+      'progress-old',
+      '[done 1]',
+      'done',
+    ]);
+    expect(store.visibleTaskIdsForProject('project-1')).toEqual([
+      'review-new',
+      'review-old',
+      'progress-new',
+      'progress-old',
+      'done',
+    ]);
+  });
+
+  it('toggles grouping through the memento', () => {
+    const store = storeWithStatuses(false);
+
+    store.setGroupTasksByStatus(true);
+
+    expect(store.groupTasksByStatus).toBe(true);
+    expect(store.sidebarRows.filter((row) => row.kind === 'status')).toHaveLength(3);
   });
 });

@@ -105,6 +105,8 @@ export const SidebarTaskItem = observer(function SidebarTaskItem({
       onArchive={handleArchive}
       onReconnect={handleReconnect}
       onConvertAutomation={undefined}
+      status={task.data.status}
+      onSetStatus={canPin ? (status) => void task.updateStatus(status) : undefined}
       onDelete={handleDelete}
     >
       <SidebarMenuRow

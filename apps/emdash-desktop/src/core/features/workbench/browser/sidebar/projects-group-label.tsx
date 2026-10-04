@@ -45,6 +45,13 @@ export const ProjectsGroupLabel = observer(function ProjectsGroupLabel() {
                 </DropdownMenu.RadioItem>
               </DropdownMenu.RadioGroup>
             </DropdownMenu.Group>
+            <DropdownMenu.Separator />
+            <DropdownMenu.CheckboxItem
+              checked={getSidebarStore().groupTasksByStatus}
+              onCheckedChange={(checked) => getSidebarStore().setGroupTasksByStatus(checked)}
+            >
+              Group by status
+            </DropdownMenu.CheckboxItem>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
         <Tooltip.Root>

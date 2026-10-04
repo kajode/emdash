@@ -1,6 +1,16 @@
 import { ContextMenu, toast } from '@emdash/ui/react/primitives';
 import { Archive, Copy, MessageSquare, Pencil, Pin, PinOff, RotateCcw, Trash2 } from 'lucide-react';
 import React from 'react';
+import type { TaskLifecycleStatus } from '@core/primitives/tasks/api';
+import { TASK_STATUS_LABELS, TaskStatusIcon } from './task-status-label';
+
+const SELECTABLE_STATUSES: readonly TaskLifecycleStatus[] = [
+  'todo',
+  'in_progress',
+  'review',
+  'done',
+  'cancelled',
+];
 
 interface TaskContextMenuProps {
   children: React.ReactNode;
@@ -16,6 +26,8 @@ interface TaskContextMenuProps {
   onRestore?: () => void;
   onReconnect?: () => void;
   onConvertAutomation?: () => void;
+  status?: TaskLifecycleStatus;
+  onSetStatus?: (status: TaskLifecycleStatus) => void;
   onDelete: () => void;
 }
 
@@ -33,6 +45,8 @@ export function TaskContextMenu({
   onRestore,
   onReconnect,
   onConvertAutomation,
+  status,
+  onSetStatus,
   onDelete,
 }: TaskContextMenuProps) {
   const archiveDisabledReasonId = React.useId();
@@ -107,6 +121,24 @@ export function TaskContextMenu({
             <Copy className="size-4" />
             Copy branch name
           </ContextMenu.Item>
+        )}
+        {onSetStatus && (
+          <>
+            <ContextMenu.Separator />
+            <ContextMenu.Group>
+              <ContextMenu.Label>Status</ContextMenu.Label>
+              {SELECTABLE_STATUSES.map((option) => (
+                <ContextMenu.Item
+                  key={option}
+                  disabled={option === status}
+                  onClick={() => onSetStatus(option)}
+                >
+                  <TaskStatusIcon status={option} className="size-4" />
+                  {TASK_STATUS_LABELS[option]}
+                </ContextMenu.Item>
+              ))}
+            </ContextMenu.Group>
+          </>
         )}
         <ContextMenu.Separator />
         <ContextMenu.Item variant="destructive" onClick={onDelete}>

@@ -35,6 +35,7 @@ import {
   useWorkspaceSlots,
 } from '@core/primitives/navigation/browser/navigation-hooks';
 import { SidebarProjectItem } from './project-item';
+import { SidebarStatusGroupLabel } from './status-group-label';
 import { SidebarTaskItem } from './task-item';
 
 const ROW_HEIGHT = 32;
@@ -61,7 +62,10 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
     currentView === 'task' && taskParams.projectId
       ? getSidebarStore().expandedProjectIds.has(taskParams.projectId)
       : null;
-  const allDndIds = useMemo(() => rows.map(rowToDndId), [rows]);
+  const allDndIds = useMemo(
+    () => rows.filter((row) => row.kind !== 'status').map(rowToDndId),
+    [rows]
+  );
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -225,6 +229,13 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
                   </SortableRow>
                 );
               }
+              if (row.kind === 'status') {
+                return (
+                  <div key={dndId} style={vStyle}>
+                    <SidebarStatusGroupLabel status={row.status} count={row.count} />
+                  </div>
+                );
+              }
               return (
                 <SortableRow key={`${row.projectId}:${row.taskId}`} dndId={dndId} style={vStyle}>
                   <SidebarTaskItem projectId={row.projectId} taskId={row.taskId} />
@@ -251,6 +262,8 @@ type SidebarDndId =
 
 function rowToDndId(row: SidebarRow): string {
   if (row.kind === 'project') return toProjectDndId(row.projectId);
+  // Status headers are not sortable; the id only keys the row and never parses as a drag target.
+  if (row.kind === 'status') return `status::${row.projectId}::${row.status}`;
   return toTaskDndId(row.projectId, row.taskId);
 }
 
