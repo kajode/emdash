@@ -53,6 +53,8 @@ export interface SessionMachineState {
   readonly queuedPrompts: readonly QueuedPrompt[];
   readonly agentTurnActive: boolean;
   readonly backgroundAgentCount: number;
+  /** Running background shell commands and watchers: busy, but never queueing prompts. */
+  readonly backgroundJobCount: number;
 }
 
 export function initialMachineState(conversationId: string): SessionMachineState {
@@ -66,6 +68,7 @@ export function initialMachineState(conversationId: string): SessionMachineState
     queuedPrompts: [],
     agentTurnActive: false,
     backgroundAgentCount: 0,
+    backgroundJobCount: 0,
   };
 }
 
@@ -92,6 +95,7 @@ export type DomainEvent =
   | { type: 'TurnEnded'; outcome: TurnOutcome }
   | { type: 'AgentActivity'; active: boolean }
   | { type: 'AgentsChanged'; runningCount: number }
+  | { type: 'JobsChanged'; runningCount: number }
   | { type: 'CancellationRequested' }
   | { type: 'PermissionRequested'; request: AcpPermissionRequest }
   | { type: 'PermissionResolved'; requestId: string }
@@ -321,6 +325,12 @@ export function evolve(
       };
     }
 
+    case 'JobsChanged':
+      return {
+        state: { ...s, backgroundJobCount: ev.runningCount },
+        effects: [{ type: 'state' }],
+      };
+
     case 'CancellationRequested': {
       if (s.phase.kind !== 'working' && !s.agentTurnActive && s.backgroundAgentCount === 0) {
         return warn(s, `CancellationRequested in phase '${s.phase.kind}'`);
@@ -409,7 +419,8 @@ export function projectSessionState(s: SessionMachineState): SessionState {
   const activeTurn = activeTurnFromPhase(s.phase);
   const lifecycle = phaseToLifecycle(s.phase);
   const isWorking = s.phase.kind === 'working' || s.phase.kind === 'cancelling';
-  const isGenerating = isWorking || s.agentTurnActive || s.backgroundAgentCount > 0;
+  const isGenerating =
+    isWorking || s.agentTurnActive || s.backgroundAgentCount > 0 || s.backgroundJobCount > 0;
   return {
     lifecycle,
     activeTurnId: activeTurn?.id ?? null,
@@ -485,7 +496,12 @@ export class SessionMachine {
   }
   get isGenerating(): boolean {
     const state = this.machine.current();
-    return this.isWorking || state.agentTurnActive || state.backgroundAgentCount > 0;
+    return (
+      this.isWorking ||
+      state.agentTurnActive ||
+      state.backgroundAgentCount > 0 ||
+      state.backgroundJobCount > 0
+    );
   }
 
   dispatch(

@@ -18,6 +18,11 @@ export const agentStateSchema = z.object({
   completedAt: z.number().optional(),
   /** True for Claude-style async/background agents that can outlive their launch turn. */
   background: z.boolean().optional(),
+  /**
+   * True for a background shell command or watcher. A running job keeps the session
+   * busy, but unlike a background agent it does not hold back the next prompt.
+   */
+  job: z.boolean().optional(),
   /** Provider-managed file containing background-agent output, when available. */
   outputFile: z.string().optional(),
   /** Provider-supplied completion summary for background-agent updates. */

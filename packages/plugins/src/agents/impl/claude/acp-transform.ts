@@ -23,7 +23,7 @@ export function enrichClaudeUpdate(update: NormalizedEvent, raw: SessionUpdate):
       return {
         kind: 'subagent_update',
         agentId: notification.taskId,
-        toolCallId: notification.toolUseId,
+        ...(notification.toolUseId !== undefined ? { toolCallId: notification.toolUseId } : {}),
         status: notification.status,
         summary: notification.summary,
         outputFile: notification.outputFile,
@@ -65,6 +65,22 @@ export function enrichClaudeUpdate(update: NormalizedEvent, raw: SessionUpdate):
     };
   }
 
+  const job = parseJobLaunch(raw);
+  if (job) {
+    return {
+      kind: 'subagent',
+      operation: 'update',
+      toolCallId: normalizedUpdate.toolCallId,
+      title: jobTitle(raw) ?? normalizedUpdate.title ?? '',
+      status: 'in_progress',
+      parentToolCallId: parentPatch.parentToolCallId ?? normalizedUpdate.parentToolCallId,
+      background: true,
+      job: true,
+      agentId: job.taskId,
+      ...(job.outputFile !== undefined ? { outputFile: job.outputFile } : {}),
+    };
+  }
+
   if (!parentPatch.parentToolCallId && outputPatch.outputText === undefined)
     return normalizedUpdate;
   return { ...normalizedUpdate, ...parentPatch, ...outputPatch };
@@ -84,9 +100,15 @@ type AsyncLaunch = {
   description?: string;
 };
 
+type JobLaunch = {
+  taskId: string;
+  outputFile?: string;
+};
+
 type TaskNotification = {
   taskId: string;
-  toolUseId: string;
+  /** Absent on watcher (Monitor) events, which only name the task. */
+  toolUseId?: string;
   outputFile?: string;
   status: 'pending' | 'in_progress' | 'completed' | 'failed';
   summary?: string;
@@ -183,6 +205,44 @@ function parseAsyncLaunch(raw: SessionUpdate): AsyncLaunch | null {
   };
 }
 
+/**
+ * A shell command started with `run_in_background`, or a Monitor watcher: both return
+ * at once with a task id and report back later through `<task-notification>`.
+ */
+function parseJobLaunch(raw: SessionUpdate): JobLaunch | null {
+  const toolName = claudeToolName(raw);
+  if (toolName !== 'Bash' && toolName !== 'Monitor') return null;
+  const text = rawText(raw);
+
+  const shell = /Command running in background with ID: ([\w-]+)\./.exec(text);
+  if (shell?.[1]) {
+    const outputFile = /Output is being written to: (\S+?)\.(?:\s|$)/.exec(text)?.[1];
+    return {
+      taskId: shell[1],
+      ...(outputFile ? { outputFile } : {}),
+    };
+  }
+
+  const watcher = /Monitor started \(task ([\w-]+)/.exec(text);
+  if (watcher?.[1]) return { taskId: watcher[1] };
+
+  const response = claudeMeta(raw)?.toolResponse as
+    | { backgroundTaskId?: unknown }
+    | null
+    | undefined;
+  if (typeof response?.backgroundTaskId === 'string') {
+    return { taskId: response.backgroundTaskId };
+  }
+  return null;
+}
+
+function jobTitle(raw: SessionUpdate): string | undefined {
+  const input = (raw as { rawInput?: { description?: unknown; command?: unknown } }).rawInput;
+  if (typeof input?.description === 'string' && input.description) return input.description;
+  if (typeof input?.command === 'string' && input.command) return input.command;
+  return undefined;
+}
+
 function rawText(raw: SessionUpdate): string {
   const parts: string[] = [];
   const content = (raw as { content?: unknown; rawOutput?: unknown }).content;
@@ -218,15 +278,29 @@ function isLocalCommandChunk(text: string): boolean {
 export function parseTaskNotification(text: string): TaskNotification | null {
   if (!text.trimStart().startsWith('<task-notification>')) return null;
   const taskId = getTag(text, 'task-id');
+  if (!taskId) return null;
   const toolUseId = getTag(text, 'tool-use-id');
-  if (!taskId || !toolUseId) return null;
+  const event = getTag(text, 'event');
+  // Watcher events carry no tool-use id and no status: the event text says whether
+  // the watch is still armed.
+  if (!toolUseId && !event) return null;
+  const summary = getTag(text, 'summary');
   return {
     taskId,
-    toolUseId,
-    status: toNotificationStatus(getTag(text, 'status')),
+    ...(toolUseId ? { toolUseId } : {}),
+    status:
+      event !== null && getTag(text, 'status') === null
+        ? watcherEventStatus(event)
+        : toNotificationStatus(getTag(text, 'status')),
     ...(getTag(text, 'output-file') ? { outputFile: getTag(text, 'output-file')! } : {}),
-    ...(getTag(text, 'summary') ? { summary: getTag(text, 'summary')! } : {}),
+    ...(event ? { summary: event } : summary ? { summary } : {}),
   };
+}
+
+function watcherEventStatus(event: string): TaskNotification['status'] {
+  return /^\[Monitor (expired|ended|stopped|exited|finished|timed out|was killed)/i.test(event)
+    ? 'completed'
+    : 'in_progress';
 }
 
 function getTag(text: string, tag: string): string | null {
@@ -240,7 +314,10 @@ function toNotificationStatus(
   switch (status) {
     case 'completed':
       return 'completed';
+    case 'stopped':
+      return 'completed';
     case 'failed':
+    case 'killed':
       return 'failed';
     case 'pending':
       return 'pending';

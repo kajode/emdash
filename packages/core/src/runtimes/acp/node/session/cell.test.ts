@@ -105,6 +105,54 @@ describe('SessionCell prompts', () => {
     expect(agent.prompt).toHaveBeenCalledTimes(2);
     expect(cell.sessionState.queuedPrompts).toHaveLength(0);
   });
+  it('stays busy while a background job runs but sends the next prompt at once', async () => {
+    const { cell, agent } = makeCell();
+    agent.prompt = vi.fn().mockResolvedValue({ stopReason: 'end_turn' });
+    cell.push({
+      kind: 'subagent',
+      toolCallId: 'bash-1',
+      title: 'pnpm dev',
+      status: 'in_progress',
+      parentToolCallId: null,
+      background: true,
+      job: true,
+      agentId: 'job-1',
+    });
+
+    // The launch itself counts as agent activity until the turn quiesces.
+    await vi.waitFor(() => expect(cell.sessionState.agentTurnActive).toBe(false));
+    expect(cell.sessionState.isGenerating).toBe(true);
+    expect(cell.sessionState.backgroundAgentCount).toBe(0);
+    expect(await cell.prompt({ text: 'while it runs' })).toEqual({
+      success: true,
+      data: { queued: false },
+    });
+
+    cell.push({ kind: 'subagent_update', agentId: 'job-1', status: 'completed' });
+    await vi.waitFor(() => expect(cell.sessionState.isGenerating).toBe(false));
+    cell.dispose();
+  });
+
+  it('settles a job left running by a replayed session, whose process is gone', () => {
+    const { cell } = makePendingCell();
+    cell.beginReplay();
+    cell.push({
+      kind: 'subagent',
+      toolCallId: 'bash-1',
+      title: 'pnpm dev',
+      status: 'in_progress',
+      parentToolCallId: null,
+      background: true,
+      job: true,
+      agentId: 'job-1',
+    });
+
+    cell.endReplay();
+
+    expect(cell.sessionState.isGenerating).toBe(false);
+    cell.dispose();
+  });
+
   it('keeps prompts queued while background agents run and drains after cancel settles them', async () => {
     const { cell, agent } = makeCell();
     agent.prompt = vi.fn().mockResolvedValue({ stopReason: 'end_turn' });

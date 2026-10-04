@@ -8,6 +8,7 @@ import {
   evolve,
   initialMachineState,
   phaseToLifecycle,
+  projectSessionState,
   SessionMachine,
 } from './machine';
 
@@ -190,6 +191,24 @@ describe('lifecycle control', () => {
 
     expect(result.state.queuedPrompts).toHaveLength(0);
     expect(result.effects).toContainEqual({ type: 'sendPrompt', prompt: queued });
+  });
+
+  it('a running background job keeps the session generating without queueing a prompt', () => {
+    const state = evolve(makeReady(), { type: 'JobsChanged', runningCount: 1 }).state;
+
+    expect(state.backgroundJobCount).toBe(1);
+    expect(projectSessionState(state).isGenerating).toBe(true);
+    const result = decide(state, { type: 'Prompt', prompt });
+    expect(isOk(result)).toBe(true);
+    if (!isOk(result)) return;
+    expect(result.data).toEqual([{ type: 'PromptStarted', prompt }]);
+  });
+
+  it('stops generating once the last background job ends', () => {
+    let state = evolve(makeReady(), { type: 'JobsChanged', runningCount: 2 }).state;
+    state = evolve(state, { type: 'JobsChanged', runningCount: 0 }).state;
+
+    expect(projectSessionState(state).isGenerating).toBe(false);
   });
 
   it('tracks agent activity and background agent counts', () => {

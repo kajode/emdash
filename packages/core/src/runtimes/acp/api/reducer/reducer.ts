@@ -182,6 +182,18 @@ function toAgentStatus(
   }
 }
 
+/**
+ * A job is announced on the result of an ordinary tool call and may arrive without a
+ * label of its own: name it after the transcript row it belongs to.
+ */
+function withRowTitle(event: NormalizedEvent, items: readonly unknown[]): NormalizedEvent {
+  if (event.kind !== 'subagent' || event.title) return event;
+  const row = (items as readonly { toolCallId?: string; title?: string }[]).find(
+    (item) => item.toolCallId === event.toolCallId
+  );
+  return row?.title ? { ...event, title: row.title } : event;
+}
+
 function updateAgentSlice(
   agents: AgentState[],
   event: NormalizedEvent,
@@ -213,10 +225,11 @@ function updateAgentSlice(
       agentId,
       toolCallId,
       launchTurnId: existing?.launchTurnId ?? launchTurnId,
-      name: event.title,
+      name: event.title || existing?.name || 'Background job',
       status,
       startedAt: idx >= 0 ? agents[idx].startedAt : at,
       ...(event.background !== undefined ? { background: event.background } : {}),
+      ...(event.job !== undefined ? { job: event.job } : {}),
       ...(event.outputFile !== undefined ? { outputFile: event.outputFile } : {}),
       ...completedAt,
     };
@@ -472,7 +485,7 @@ function reduceInput(s: ParserState, input: ReducerInput, deps: ReducerDeps): Pa
   let agents = s.agents;
   for (const operation of operations) {
     items = foldItem(items, operation, turnId, input.at);
-    agents = updateAgentSlice(agents, operation, turnId, input.at);
+    agents = updateAgentSlice(agents, withRowTitle(operation, items), turnId, input.at);
   }
   const updated = items === owner.items ? owner : { ...owner, items };
   const transcript = isActive

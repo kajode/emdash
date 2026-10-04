@@ -325,8 +325,10 @@ function upsertSpecialEvent(
         id,
         seq,
         toolCallId: event.toolCallId,
-        title: event.title,
-        name: event.title,
+        // A job is announced on the result of an ordinary tool call, which may not
+        // repeat its input: keep the label the row already had.
+        title: event.title || existing?.title || 'Background job',
+        name: event.title || existing?.title || 'Background job',
         status: mapped,
         ...(event.inputSummary !== undefined ? { inputSummary: event.inputSummary } : {}),
         ...(event.background !== undefined ? { background: event.background } : {}),

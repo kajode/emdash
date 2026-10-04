@@ -14,6 +14,7 @@ import { authenticatedFromEnv, commandAuthStatus } from '../../helpers/auth';
 import { enrichCodexUpdate } from './acp-enrich';
 import { isCodexSessionNotFound } from './acp-errors';
 import { codexAdapter } from './adapter';
+import { CODEX_ASYNC_TASKS_CLIENT_META, translateCodexAsyncTasks } from './async-tasks';
 import { buildCodexHookConfig } from './hooks';
 import { icon } from './icon';
 
@@ -154,8 +155,12 @@ export const provider = registerPluginBehavior(plugin, {
       },
     }),
     connect: (io, toClient) => {
-      return connectStdioAcp(io, toClient);
+      return connectStdioAcp(
+        { stdin: io.stdin, stdout: translateCodexAsyncTasks(io.stdout) },
+        toClient
+      );
     },
+    clientCapabilitiesMeta: CODEX_ASYNC_TASKS_CLIENT_META,
     enrich: enrichCodexUpdate,
     isSessionNotFound: isCodexSessionNotFound,
   },

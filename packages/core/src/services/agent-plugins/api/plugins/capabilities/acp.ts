@@ -92,6 +92,12 @@ export interface IAcpBehavior {
    */
   enrich?: EnrichHook;
 
+  /**
+   * Vendor extensions to advertise in `initialize`'s `clientCapabilities._meta`, for
+   * adapters that gate optional behaviour on a client capability.
+   */
+  clientCapabilitiesMeta?: Record<string, unknown>;
+
   /** Recognize provider-specific proof that session/load's requested session is missing. */
   isSessionNotFound?(error: unknown, sessionId: string): boolean;
 

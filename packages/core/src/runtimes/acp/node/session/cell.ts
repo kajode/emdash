@@ -68,6 +68,7 @@ export class SessionCell {
   private configCatalogState: SessionConfigCatalog['kind'] = 'pending';
   private quiesceTimer: ReturnType<typeof setTimeout> | null = null;
   private lastRunningAgentCount = 0;
+  private lastRunningJobCount = 0;
   private readonly effectDriver: MachineEffectDriver<Effect>;
   private preparedPromptEffects: Effect[] | null = null;
 
@@ -174,6 +175,7 @@ export class SessionCell {
     this.applyEvent({ type: 'ReplayStarted' });
     this.transcript.beginReplay(at);
     this.lastRunningAgentCount = 0;
+    this.lastRunningJobCount = 0;
   }
 
   prepareActivation(
@@ -200,6 +202,7 @@ export class SessionCell {
 
   endReplay(at = Date.now()): void {
     const previousRunningAgentCount = this.lastRunningAgentCount;
+    this.settleReplayedJobs();
     this.transcript.endReplay(at);
     this.dispatchAgentsChangedIfNeeded(previousRunningAgentCount);
     this.applyEvent({ type: 'ReplayEnded', status: 'complete' });
@@ -597,12 +600,39 @@ export class SessionCell {
   }
 
   private dispatchAgentsChangedIfNeeded(previousRunningAgentCount: number): void {
+    this.dispatchJobsChangedIfNeeded();
     const nextRunningAgentCount = this.transcript.agents.filter(
-      (agent) => agent.background === true && agent.status === 'running'
+      (agent) => agent.background === true && agent.job !== true && agent.status === 'running'
     ).length;
     if (nextRunningAgentCount === previousRunningAgentCount) return;
     this.lastRunningAgentCount = nextRunningAgentCount;
     this.applyEvent({ type: 'AgentsChanged', runningCount: nextRunningAgentCount });
+  }
+
+  private dispatchJobsChangedIfNeeded(): void {
+    const nextRunningJobCount = this.transcript.agents.filter(
+      (agent) => agent.job === true && agent.status === 'running'
+    ).length;
+    if (nextRunningJobCount === this.lastRunningJobCount) return;
+    this.lastRunningJobCount = nextRunningJobCount;
+    this.applyEvent({ type: 'JobsChanged', runningCount: nextRunningJobCount });
+  }
+
+  /**
+   * A job still running at the end of a replay belonged to an agent process that no
+   * longer exists, so its completion notice can never arrive: settle it instead of
+   * leaving the session busy forever.
+   */
+  private settleReplayedJobs(): void {
+    for (const agent of this.transcript.agents) {
+      if (agent.job !== true || agent.status !== 'running') continue;
+      this.transcript.pushEvent({
+        kind: 'subagent_update',
+        agentId: agent.agentId,
+        toolCallId: agent.toolCallId,
+        status: 'completed',
+      });
+    }
   }
 
   private settleRunningAgents(scope: 'turn' | 'all', status: 'completed' | 'failed'): void {

@@ -288,6 +288,104 @@ describe('enrichClaudeUpdate', () => {
     });
   });
 
+  it('reclassifies a background shell command as a running job', () => {
+    const raw = {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'tc-1',
+      rawInput: { command: 'pnpm run build', description: 'Build the app' },
+      rawOutput:
+        'Command running in background with ID: bq9w7k3ej. Output is being written to: /tmp/tasks/bq9w7k3ej.output. You will be notified when it completes.',
+      _meta: { claudeCode: { toolName: 'Bash' } },
+    } as unknown as SessionUpdate;
+
+    expect(enrichClaudeUpdate(makeToolUpdate(), raw)).toEqual({
+      kind: 'subagent',
+      operation: 'update',
+      toolCallId: 'tc-1',
+      title: 'Build the app',
+      status: 'in_progress',
+      parentToolCallId: null,
+      background: true,
+      job: true,
+      agentId: 'bq9w7k3ej',
+      outputFile: '/tmp/tasks/bq9w7k3ej.output',
+    });
+  });
+
+  it('reclassifies a started watcher as a running job', () => {
+    const raw = {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'tc-1',
+      rawOutput:
+        'Monitor started (task bfd7pfdfg, expires in 20m unless the source ends first). You will be notified on each event.',
+      _meta: { claudeCode: { toolName: 'Monitor' } },
+    } as unknown as SessionUpdate;
+
+    expect(enrichClaudeUpdate(makeToolUpdate(), raw)).toMatchObject({
+      kind: 'subagent',
+      background: true,
+      job: true,
+      agentId: 'bfd7pfdfg',
+      status: 'in_progress',
+      title: '',
+    });
+  });
+
+  it('tracks a background command from launch to its completion notice', () => {
+    const p = new AcpTranscriptParser({ conversationId: 'claude-job', enrich: enrichClaudeUpdate });
+    p.push(
+      {
+        sessionUpdate: 'tool_call',
+        toolCallId: 'bash-1',
+        title: 'pnpm run build',
+        kind: 'execute',
+        status: 'in_progress',
+        _meta: { claudeCode: { toolName: 'Bash' } },
+      },
+      0
+    );
+    p.push(
+      {
+        sessionUpdate: 'tool_call_update',
+        toolCallId: 'bash-1',
+        status: 'completed',
+        rawOutput:
+          'Command running in background with ID: b1. Output is being written to: /tmp/b1.output.',
+        _meta: { claudeCode: { toolName: 'Bash' } },
+      } as unknown as SessionUpdate,
+      10
+    );
+
+    expect(p.agents).toMatchObject([
+      { agentId: 'b1', toolCallId: 'bash-1', name: 'pnpm run build', job: true, status: 'running' },
+    ]);
+
+    p.push(
+      {
+        sessionUpdate: 'user_message_chunk',
+        content: {
+          type: 'text',
+          text: '<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>bash-1</tool-use-id>\n<status>completed</status>\n<summary>done</summary>\n</task-notification>',
+        },
+      },
+      20
+    );
+
+    expect(p.agents).toMatchObject([{ agentId: 'b1', status: 'completed', summary: 'done' }]);
+  });
+
+  it('leaves a foreground shell command as an ordinary tool update', () => {
+    const update = makeToolUpdate();
+    const raw = {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'tc-1',
+      rawOutput: 'build finished',
+      _meta: { claudeCode: { toolName: 'Bash' } },
+    } as unknown as SessionUpdate;
+
+    expect(enrichClaudeUpdate(update, raw)).toMatchObject({ kind: 'tool_update' });
+  });
+
   it('reclassifies task-notification user chunks as subagent updates', () => {
     const update: NormalizedEvent = {
       kind: 'message',
@@ -348,5 +446,38 @@ describe('parseTaskNotification', () => {
       status: 'completed',
       summary: 'Background command "Search & report" completed',
     });
+  });
+});
+
+describe('parseTaskNotification for jobs and watchers', () => {
+  const watcher = (event: string) =>
+    `<task-notification>\n<task-id>bfd7pfdfg</task-id>\n<summary>Monitor event: "scoring job"</summary>\n<event>${event}</event>\n</task-notification>`;
+
+  it('keeps a watcher running on an ordinary event, which names no tool call', () => {
+    expect(parseTaskNotification(watcher('job 12 finished'))).toEqual({
+      taskId: 'bfd7pfdfg',
+      status: 'in_progress',
+      summary: 'job 12 finished',
+    });
+  });
+
+  it('ends a watcher when it reports that it expired', () => {
+    expect(
+      parseTaskNotification(watcher('[Monitor expired after 20m with no events delivered.]'))
+    ).toMatchObject({ taskId: 'bfd7pfdfg', status: 'completed' });
+  });
+
+  it('treats a killed job as failed and a stopped one as finished', () => {
+    const notice = (status: string) =>
+      `<task-notification><task-id>b1</task-id><tool-use-id>toolu_1</tool-use-id><status>${status}</status></task-notification>`;
+
+    expect(parseTaskNotification(notice('killed'))?.status).toBe('failed');
+    expect(parseTaskNotification(notice('stopped'))?.status).toBe('completed');
+  });
+
+  it('still rejects a notification that names neither a tool call nor an event', () => {
+    expect(
+      parseTaskNotification('<task-notification><task-id>b1</task-id></task-notification>')
+    ).toBeNull();
   });
 });

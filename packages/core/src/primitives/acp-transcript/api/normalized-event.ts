@@ -72,6 +72,8 @@ export type NormalizedEvent =
       parentToolCallId: string | null;
       inputSummary?: string;
       background?: boolean;
+      /** A background shell command or watcher rather than an agent. */
+      job?: boolean;
       agentId?: string;
       outputFile?: string;
     }
