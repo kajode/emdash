@@ -20,14 +20,20 @@ export const ProjectsGroupLabel = observer(function ProjectsGroupLabel() {
               render={
                 <Tooltip.Trigger
                   render={
-                    <Button type="button" variant="ghost" size="xs" icon aria-label="Sort projects">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="xs"
+                      icon
+                      aria-label="Sort and group tasks"
+                    >
                       <ListFilter />
                     </Button>
                   }
                 />
               }
             />
-            <Tooltip.Content>Sort by</Tooltip.Content>
+            <Tooltip.Content>Sort and group</Tooltip.Content>
           </Tooltip.Root>
           <DropdownMenu.Content className="min-w-48">
             <DropdownMenu.Group>
@@ -48,12 +54,25 @@ export const ProjectsGroupLabel = observer(function ProjectsGroupLabel() {
               </DropdownMenu.RadioGroup>
             </DropdownMenu.Group>
             <DropdownMenu.Separator />
-            <DropdownMenu.CheckboxItem
-              checked={getSidebarStore().groupTasksByStatus}
-              onCheckedChange={(checked) => getSidebarStore().setGroupTasksByStatus(checked)}
-            >
-              Group by status
-            </DropdownMenu.CheckboxItem>
+            <DropdownMenu.Group>
+              <DropdownMenu.Label>Group by</DropdownMenu.Label>
+              <DropdownMenu.RadioGroup
+                value={getSidebarStore().groupTasksByStatus ? 'status' : 'project'}
+              >
+                <DropdownMenu.RadioItem
+                  value="project"
+                  onClick={() => getSidebarStore().setGroupTasksByStatus(false)}
+                >
+                  Project
+                </DropdownMenu.RadioItem>
+                <DropdownMenu.RadioItem
+                  value="status"
+                  onClick={() => getSidebarStore().setGroupTasksByStatus(true)}
+                >
+                  Status
+                </DropdownMenu.RadioItem>
+              </DropdownMenu.RadioGroup>
+            </DropdownMenu.Group>
           </DropdownMenu.Content>
         </DropdownMenu.Root>
         <Tooltip.Root>
