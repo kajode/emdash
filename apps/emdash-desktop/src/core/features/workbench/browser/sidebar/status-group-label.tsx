@@ -23,11 +23,11 @@ export function SidebarStatusGroupLabel({
     <button
       type="button"
       aria-expanded={!collapsed}
-      className="group/status flex h-8 w-full items-center gap-2.5 rounded-lg px-2 text-left text-sm font-semibold text-foreground hover:bg-background-tertiary-1"
+      className="group/status flex h-9 w-full items-center gap-2.5 rounded-lg px-2 text-left text-[15px] font-semibold text-foreground hover:bg-background-tertiary-1"
       onMouseDown={(e) => e.preventDefault()}
       onClick={onToggle}
     >
-      <TaskStatusIcon status={status} className="size-3.5" />
+      <TaskStatusIcon status={status} className="size-4" />
       <span className="min-w-0 truncate">{TASK_STATUS_LABELS[status]}</span>
       <Chevron
         className={
@@ -37,7 +37,7 @@ export function SidebarStatusGroupLabel({
         }
       />
       {collapsed && (
-        <span className="ml-auto text-xs font-normal text-foreground-tertiary-passive">
+        <span className="text-xs font-normal text-foreground-tertiary-passive">
           {count}
         </span>
       )}

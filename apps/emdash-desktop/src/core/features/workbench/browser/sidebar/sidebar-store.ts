@@ -131,10 +131,6 @@ export class SidebarStore {
     return new Set(this.state.collapsedStatusGroups ?? []);
   }
 
-  get hasMultipleProjects(): boolean {
-    return this.projectManager.projects.size > 1;
-  }
-
   /**
    * Grouped layout: one status group per lifecycle status across every project, then
    * the projects themselves as plain rows so their pages and actions stay reachable.

@@ -40,9 +40,20 @@ import { SidebarStatusGroupLabel } from './status-group-label';
 import { SidebarTaskItem } from './task-item';
 
 const ROW_HEIGHT = 32;
+// Status-grouped layout: roomier task rows, and headers that carry the gap above their group.
+const GROUPED_TASK_ROW_HEIGHT = 36;
+const STATUS_HEADER_ROW_HEIGHT = 44;
+
+function rowHeight(row: SidebarRow | undefined, grouped: boolean): number {
+  if (!row) return ROW_HEIGHT;
+  if (row.kind === 'status' || row.kind === 'projects-label') return STATUS_HEADER_ROW_HEIGHT;
+  if (row.kind === 'task' && grouped) return GROUPED_TASK_ROW_HEIGHT;
+  return ROW_HEIGHT;
+}
 
 export const SidebarVirtualList = observer(function SidebarVirtualList() {
   const rows = getSidebarStore().sidebarRows;
+  const grouped = getSidebarStore().groupTasksByStatus;
   const { currentView } = useWorkspaceSlots();
   const taskParams = useViewParams(taskViewDef) ?? {
     projectId: undefined,
@@ -71,9 +82,14 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => ROW_HEIGHT,
+    estimateSize: (index) => rowHeight(rows[index], grouped),
     overscan: 8,
   });
+
+  // Row heights depend on the row kind, so cached sizes are stale once the rows change.
+  useEffect(() => {
+    virtualizer.measure();
+  }, [rows, grouped, virtualizer]);
 
   // Scroll the active project/task into view only when the navigation target itself
   // changes, plus the active task's project expansion state. Re-running on every
@@ -232,7 +248,7 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
               }
               if (row.kind === 'status') {
                 return (
-                  <div key={dndId} style={vStyle}>
+                  <div key={dndId} style={vStyle} className="flex items-end">
                     <SidebarStatusGroupLabel
                       status={row.status}
                       count={row.count}
@@ -244,7 +260,7 @@ export const SidebarVirtualList = observer(function SidebarVirtualList() {
               }
               if (row.kind === 'projects-label') {
                 return (
-                  <div key={dndId} style={vStyle} className="flex items-end px-2 pb-1.5">
+                  <div key={dndId} style={vStyle} className="flex items-end px-2 pb-2">
                     <MicroLabel className="font-medium text-foreground-tertiary-passive">
                       Projects
                     </MicroLabel>
